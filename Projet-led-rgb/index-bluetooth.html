@@ -1,0 +1,153 @@
+﻿<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Contrôle LEDs BLE - Potentiel Demo</title>
+  <style>
+    body { font-family: Arial, sans-serif; text-align: center; background: #111; color: #eee; padding: 20px; }
+    h1 { color: #4caf50; }
+    button { padding: 12px 24px; margin: 8px; font-size: 16px; border: none; border-radius: 8px; cursor: pointer; }
+    #connect { background: #2196f3; color: white; }
+    #disconnect { background: #f44336; color: white; }
+    #status { margin: 20px 0; font-weight: bold; font-size: 18px; }
+    .mode-btn { background: #673ab7; color: white; }
+    .pastel-btn { width: 80px; height: 60px; border: 2px solid #fff; margin: 10px; border-radius: 8px; cursor: pointer; }
+    #brightness { width: 80%; max-width: 400px; margin: 20px auto; }
+    label { display: block; margin: 10px 0; font-size: 18px; }
+  </style>
+</head>
+<body>
+
+  <h1>Contrôle de tes LEDs via Bluetooth</h1>
+  <p id="status">Non connecté – Clique sur "Connecter"</p>
+
+  <button id="connect">Connecter au module BLE</button>
+  <button id="disconnect" disabled>Déconnecter</button>
+
+  <hr />
+
+  <h2>Mode d'effet</h2>
+  <button class="mode-btn" data-mode="0">Respiration 0</button>
+  <button class="mode-btn" data-mode="1">Respiration 1</button>
+  <button class="mode-btn" data-mode="2">Respiration 2</button>
+  <button class="mode-btn" data-mode="3">Respiration 3</button>
+  <button class="mode-btn" data-mode="4">Rainbow</button>
+  <button class="mode-btn" data-mode="5">Drapeau FR</button>
+  <button class="mode-btn" data-mode="6">Éteint</button>
+  <button class="mode-btn" data-mode="10">Police</button>
+
+  <hr />
+
+  <h2>Couleur Pastel (pour modes 0-3)</h2>
+  <div>
+    <button class="pastel-btn" style="background: rgb(4,85,42);" data-pastel="0"></button>
+    <button class="pastel-btn" style="background: rgb(35,80,160);" data-pastel="1"></button>
+    <button class="pastel-btn" style="background: rgb(100,60,120);" data-pastel="2"></button>
+    <button class="pastel-btn" style="background: rgb(180,40,20);" data-pastel="3"></button>
+  </div>
+
+  <hr />
+
+  <h2>Luminosité globale</h2>
+  <label for="brightness">Valeur : <span id="brightValue">180</span>/255</label>
+  <input type="range" id="brightness" min="0" max="255" value="180" step="5" />
+
+  <script>
+    // UUIDs (doivent matcher ton code ESP32 !)
+    const SERVICE_UUID = '4fafc201-1fb5-459e-8fcc-c5c9c331914b';
+    const CHAR_MODE_UUID = 'beb5483e-36e1-4688-b7f5-ea07361b26a8';
+    const CHAR_BRIGHT_UUID = '1c95d5e3-d8f7-413a-bf3d-7d3ab0720a0c';
+    const CHAR_PASTEL_UUID = '6e400002-b5a3-f393-e0a9-e50e24dcca9e';
+
+    let device = null;
+    let server = null;
+    let service = null;
+    let charMode = null;
+    let charBright = null;
+    let charPastel = null;
+
+    const status = document.getElementById('status');
+    const connectBtn = document.getElementById('connect');
+    const disconnectBtn = document.getElementById('disconnect');
+
+    // Fonction pour écrire une valeur (byte unique)
+    async function writeValue(characteristic, value) {
+      if (!characteristic) return;
+      try {
+        const buffer = new Uint8Array([value]);
+        await characteristic.writeValue(buffer);
+        console.log(`Écrit: ${value}`);
+      } catch (err) {
+        console.error('Erreur écriture:', err);
+        status.textContent = 'Erreur lors de l\'envoi !';
+      }
+    }
+
+    // Connexion BLE
+    connectBtn.onclick = async () => {
+      try {
+        device = await navigator.bluetooth.requestDevice({
+          filters: [{ namePrefix: 'LED_Control' }],  // adapte au nom de ton ESP32
+          optionalServices: [SERVICE_UUID]
+        });
+
+        server = await device.gatt.connect();
+        service = await server.getPrimaryService(SERVICE_UUID);
+
+        charMode   = await service.getCharacteristic(CHAR_MODE_UUID);
+        charBright = await service.getCharacteristic(CHAR_BRIGHT_UUID);
+        charPastel = await service.getCharacteristic(CHAR_PASTEL_UUID);
+
+        status.textContent = `Connecté à ${device.name} !`;
+        connectBtn.disabled = true;
+        disconnectBtn.disabled = false;
+
+        // Option : auto-set luminosité initiale
+        await writeValue(charBright, 180);
+      } catch (err) {
+        console.error(err);
+        status.textContent = 'Connexion échouée : ' + err.message;
+      }
+    };
+
+    // Déconnexion
+    disconnectBtn.onclick = () => {
+      if (device && device.gatt.connected) {
+        device.gatt.disconnect();
+      }
+      status.textContent = 'Déconnecté';
+      connectBtn.disabled = false;
+      disconnectBtn.disabled = true;
+      charMode = charBright = charPastel = null;
+    };
+
+    // Changement de mode
+    document.querySelectorAll('.mode-btn').forEach(btn => {
+      btn.onclick = () => {
+        const modeVal = parseInt(btn.dataset.mode);
+        writeValue(charMode, modeVal);
+        status.textContent = `Mode changé : ${modeVal}`;
+      };
+    });
+
+    // Changement pastel
+    document.querySelectorAll('.pastel-btn').forEach(btn => {
+      btn.onclick = () => {
+        const idx = parseInt(btn.dataset.pastel);
+        writeValue(charPastel, idx);
+        status.textContent = `Pastel ${idx} sélectionné`;
+      };
+    });
+
+    // Slider luminosité
+    const brightSlider = document.getElementById('brightness');
+    const brightValue = document.getElementById('brightValue');
+    brightSlider.oninput = () => {
+      const val = parseInt(brightSlider.value);
+      brightValue.textContent = val;
+      writeValue(charBright, val);
+    };
+  </script>
+</body>
+</html>

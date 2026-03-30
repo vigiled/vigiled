@@ -1,0 +1,6 @@
+Le croquis utilise 1413766 octets (107%) de l'espace de stockage de programmes. Le maximum est de 1310720 octets.
+Les variables globales utilisent 45068 octets (13%) de mémoire dynamique, ce qui laisse 282612 octets pour les variables locales. Le maximum est de 327680 octets.
+Croquis trop gros; vois https://support.arduino.cc/hc/en-us/articles/360013825179 pour des conseils de réduction.
+text section exceeds available space in board
+
+Compilation error: text section exceeds available space in board

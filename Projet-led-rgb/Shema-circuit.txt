@@ -1,0 +1,32 @@
+ +12V batterie voiture (après contact ou fusible)
+                       ¦
+                +-------------+
+                ¦ 150 kO      ¦
+                +-------------+
+                       ¦
+                 ATTiny85 PB2 (pin 7)  ? mesure tension 11,8 V
+                       ¦
+                +-------------+
+                ¦  47 kO      ¦
+                +-------------+
+                       ¦
+                      GND
+
++12V ----------------------? Entrée + du module buck 12?5 V
+GND ----------------------? Entrée – du module buck
+
+Sortie +5 V du buck -----------------------? VCC des 8 SK6812
+                          +----------------? VCC ATTiny85 (pin 8)
+                          ¦
+                          +-? (option 100 µF vers GND)
+
+Sortie GND du buck -------? GND commun (SK6812 + ATTiny85 + bouton)
+
+Bouton poussoir :
+   Une patte ? GND
+   L’autre patte ? ATTiny85 PB3 (pin 2) + pull-up interne activée
+
+Data LEDs :
+   Première SK6812 DIN ?-- 470 O --? ATTiny85 PB1 (pin 6)
+
+Dernière SK6812 DOUT ? rien (ou suivante si tu en ajoutes)
