@@ -48,6 +48,7 @@ uint8_t pastelB[4] = { 42, 160, 120,  20 };
 uint8_t       etatBtnMode     = 0;
 unsigned long tempsAppuiMode  = 0;
 bool          longPressTraite = false;
+uint8_t       modePrecedent   = 0;   // mode restauré à la sortie du SOS
 
 uint8_t       etatBtnBright    = 0;
 unsigned long tempsAppuiBright = 0;
@@ -295,7 +296,6 @@ input[type=time]:focus{border-color:rgba(0,184,255,.5)}
     <div class="mb"     data-m="4"  onclick="setMode(4)"> <span class="mi">🌈</span><span class="ml">Arc-en-ciel</span></div>
     <div class="mb"     data-m="5"  onclick="setMode(5)"> <span class="mi">🇫🇷</span><span class="ml">Drapeau</span></div>
     <div class="mb"     data-m="7"  onclick="setMode(7)"> <span class="mi">🌊</span><span class="ml">Vague</span></div>
-    <div class="mb"     data-m="10" onclick="setMode(10)"><span class="mi">🆘</span><span class="ml">SOS</span></div>
     <div class="mb"     data-m="17" onclick="setMode(17)"><span class="mi">🔀</span><span class="ml">Biphasé</span></div>
     <div class="mb"     data-m="11" onclick="setMode(11)"><span class="mi">😴</span><span class="ml">Veille</span></div>
     <div class="mb"     data-m="12" onclick="setMode(12)"><span class="mi">💡</span><span class="ml">Fixe</span></div>
@@ -1016,28 +1016,36 @@ void vagueFluide() {
   strip.show(); delay(20);
 }
 
-// Mode 10 : SOS (morse international S-O-S en blanc)
+// Mode 10 : SOS (morse S-O-S en blanc — mode caché, appui long BTN MODE)
+// Réinitialise son état à chaque activation grâce au flag sosReset
+bool sosReset = false;
 void sosMode() {
-  // S = . . .   O = - - -   S = . . .
-  // dit=200ms  dah=600ms  pause_lettre=600ms  pause_mot=1400ms
+  // S=...  O=---  S=...
+  // Structure : durée allumé, durée éteint (par paire)
   static const uint16_t seq[] = {
-    200,200, 200,200, 200,600,          // S: . . .
-    600,200, 600,200, 600,600,          // O: - - -
-    200,200, 200,200, 200,1400          // S: . . .
+    200,200, 200,200, 200,600,   // S : . . .
+    600,200, 600,200, 600,600,   // O : - - -
+    200,200, 200,200, 200,1400   // S : . . .
   };
-  static uint8_t  idx  = 0;
-  static bool     on   = true;
+  static uint8_t       idx  = 0;
+  static bool          on   = false;
   static unsigned long last = 0;
+
+  // Reset de l état à chaque nouvelle entrée en mode SOS
+  if (!sosReset) {
+    idx  = 0;
+    on   = false;
+    last = millis();
+    sosReset = true;
+    strip.clear(); strip.show();
+    return;
+  }
+
   unsigned long now = millis();
   if (now - last < seq[idx]) return;
   last = now;
   on = !on;
-  if (on) {
-    uint8_t bri = brightness;
-    strip.fill(strip.Color(bri, bri, bri), 0, LEDS_ACTIVE);
-  } else {
-    strip.clear();
-  }
+  strip.fill(on ? strip.Color(brightness, brightness, brightness) : 0, 0, LEDS_ACTIVE);
   strip.show();
   idx = (idx + 1) % (sizeof(seq) / sizeof(seq[0]));
 }
@@ -1198,12 +1206,20 @@ void gererBoutonMode() {
   if (btn && etatBtnMode==0) { etatBtnMode=1; tempsAppuiMode=millis(); longPressTraite=false; }
   if (btn && etatBtnMode==1 && !longPressTraite && millis()-tempsAppuiMode>2000) {
     longPressTraite=true; etatBtnMode=2;
-    currentMode=(currentMode==10)?0:10;
+    if (currentMode == 10) {
+      currentMode = modePrecedent;
+      sosReset = false; // nettoyage
+    } else {
+      modePrecedent = currentMode;
+      currentMode = 10;
+      sosReset = false; // force reset de l'état SOS
+    }
+    strip.clear(); strip.show(); // reset LED state on mode change
     sauvegarderPrefs();
   }
   if (!btn && etatBtnMode==1) {
     if (millis()-tempsAppuiMode<2000 && currentMode!=10) {
-      const uint8_t cy[]={0,1,2,3,4,5,7,10,11,12,13,14,15,16,17,6};
+      const uint8_t cy[]={0,1,2,3,4,5,7,11,12,13,14,15,16,17,6};
       uint8_t idx=0;
       for (uint8_t i=0;i<sizeof(cy);i++) if(cy[i]==currentMode){idx=i;break;}
       currentMode=cy[(idx+1)%sizeof(cy)];
